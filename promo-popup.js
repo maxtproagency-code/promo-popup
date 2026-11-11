@@ -1,5 +1,5 @@
 /*!
- * Promo Popup v1.2.0 — легкий попап (заміна Claspo)
+ * Promo Popup v1.2.1 — легкий попап (заміна Claspo)
  * Автор: maxt.pro
  *
  * Режими:
@@ -16,7 +16,7 @@
 
   if (w.PromoPopup && w.PromoPopup.__loaded) return; // захист від повторного запуску GTM
 
-  var VERSION = '1.2.0';
+  var VERSION = '1.2.1';
   var STORAGE_PREFIX = 'promo_popup_';
   var QUEUE_KEY = 'promo_popup_queue';
 
@@ -190,6 +190,13 @@
     return EMAIL_RE.test(e) && e.indexOf('..') === -1 ? e.toLowerCase() : '';
   }
 
+  // Причина, чому попап не показано: видно в GTM Preview як подію <eventPrefix>_skip
+  function skip(cfg, reason) {
+    log('не показано:', reason);
+    pushDL(cfg, 'skip', { reason: reason, version: VERSION });
+    return false;
+  }
+
   function pushDL(cfg, name, extra) {
     if (!cfg.dataLayer) return;
     w.dataLayer = w.dataLayer || [];
@@ -282,30 +289,30 @@
 
   // ignoreCart: перевіряємо все, крім наявності кошика (його чекає watchCart)
   function canShow(cfg, st, ignoreCart) {
-    if (cfg.disabled) return log('вимкнено (disabled)'), false;
-    if (cfg.mode === 'promo' && !cfg.code) return log('немає промокоду в конфігу'), false;
-    if (cfg.mode === 'email' && !cfg.submit.endpoint) return log('немає submit.endpoint'), false;
+    if (cfg.disabled) return skip(cfg, 'disabled');
+    if (cfg.mode === 'promo' && !cfg.code) return skip(cfg, 'no_code');
+    if (cfg.mode === 'email' && !cfg.submit.endpoint) return skip(cfg, 'no_endpoint');
     if (DEBUG) return true;
 
     var now = Date.now();
     var start = parseDate(cfg.start, false);
     var end = parseDate(cfg.end, true);
-    if (start && now < start) return log('ще не почалось', cfg.start), false;
-    if (end && now > end) return log('вже завершилось', cfg.end), false;
+    if (start && now < start) return skip(cfg, 'not_started');
+    if (end && now > end) return skip(cfg, 'ended');
 
     var url = w.location.href;
     for (var i = 0; i < cfg.excludeUrls.length; i++) {
-      if (url.indexOf(cfg.excludeUrls[i]) !== -1) return log('виключена сторінка', cfg.excludeUrls[i]), false;
+      if (url.indexOf(cfg.excludeUrls[i]) !== -1) return skip(cfg, 'excluded_url');
     }
 
     if (!ignoreCart && cfg.mode === 'email' && cfg.cart.required && !readCart(cfg).length) {
-      return log('кошик порожній'), false;
+      return skip(cfg, 'empty_cart');
     }
 
     var s = st.get();
-    if (s.submittedAt && now - s.submittedAt < cfg.hideDaysAfterSubmit * DAY) return log('уже підписувались'), false;
-    if (s.copiedAt && now - s.copiedAt < cfg.hideDaysAfterCopy * DAY) return log('код уже копіювали'), false;
-    if (s.closedAt && now - s.closedAt < cfg.hideDaysAfterClose * DAY) return log('нещодавно закривали'), false;
+    if (s.submittedAt && now - s.submittedAt < cfg.hideDaysAfterSubmit * DAY) return skip(cfg, 'recently_submitted');
+    if (s.copiedAt && now - s.copiedAt < cfg.hideDaysAfterCopy * DAY) return skip(cfg, 'recently_copied');
+    if (s.closedAt && now - s.closedAt < cfg.hideDaysAfterClose * DAY) return skip(cfg, 'recently_closed');
     return true;
   }
 
@@ -738,7 +745,7 @@
     var left = Math.ceil(cfg.cart.waitSec * 5);          // перевірка кожні 200 мс
     var t = setInterval(function () {
       if (readCart(cfg).length) { clearInterval(t); ok(); }
-      else if (--left <= 0) { clearInterval(t); log('кошик порожній'); fail(); }
+      else if (--left <= 0) { clearInterval(t); skip(cfg, 'empty_cart'); fail(); }
     }, 200);
   }
 
