@@ -1,5 +1,5 @@
 /*!
- * Promo Popup v1.2.1 — легкий попап (заміна Claspo)
+ * Promo Popup v1.2.1 — легкий попап
  * Автор: maxt.pro
  *
  * Режими:
